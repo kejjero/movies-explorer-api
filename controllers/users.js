@@ -4,16 +4,13 @@ const User = require('../models/user');
 const BadRequestError = require('../errors/BadRequestError');
 const NotFoundError = require('../errors/NotFoundError');
 const ConflictError = require('../errors/ConflictError');
+const AuthorizationError = require('../errors/AuthorisationError');
 
 const { NODE_ENV, JWT_SECRET } = process.env;
 const MONGO_DUPLICATE_KEY_CODE = 11000;
 
 const login = (req, res, next) => {
   const { email, password } = req.body;
-
-  if (!email || !password) {
-    return next(new BadRequestError({ message: 'Не передан email или пароль' }));
-  }
 
   return User.findUserByCredentials(email, password)
     .then((user) => {
@@ -24,7 +21,7 @@ const login = (req, res, next) => {
       );
       res.send({ token });
     })
-    .catch(next);
+    .catch(() => next(new AuthorizationError('Авторизация не пройдена')));
 };
 
 const createUser = (req, res, next) => {
@@ -45,13 +42,11 @@ const createUser = (req, res, next) => {
       email: user.email,
     }))
     .catch((err) => {
-      if (err.name === 'ValidationError') {
-        next(new BadRequestError('Переданы некорректные данные.'));
-      }
       if (err.code === MONGO_DUPLICATE_KEY_CODE) {
         next(new ConflictError('Данный email уже зарегистрирован'));
+      } else {
+        next(err);
       }
-      return next(err);
     });
 };
 
@@ -64,10 +59,7 @@ const getUser = (req, res, next) => {
       return res.status(200).send(user);
     })
     .catch((err) => {
-      if (err.name === 'CastError') {
-        next(new BadRequestError('Переданы некорректный id.'));
-      }
-      return next(err);
+      next(err);
     });
 };
 
