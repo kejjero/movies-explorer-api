@@ -1,7 +1,7 @@
 const { celebrate, Joi } = require('celebrate');
 const { isURL } = require('validator');
 
-const isURLCustomValidator = (value, helpers) => (isURL(value) ? value : helpers.message('Это поле заполнено некорректно, введите URL') && false);
+const isURLCustomValidator = (value, helpers) => (isURL(value) ? value : helpers.message('Это поле заполнено некорректно, введите URL'));
 
 const validateLogin = celebrate({
   body: Joi.object().keys({
@@ -39,7 +39,7 @@ const validateCreateMovie = celebrate({
     year: Joi.string().required().min(2).max(4),
     description: Joi.string().required(),
     image: Joi.string().required().custom(isURLCustomValidator),
-    trailer: Joi.string().required().custom(isURLCustomValidator),
+    trailerLink: Joi.string().required().custom(isURLCustomValidator),
     thumbnail: Joi.string().required().custom(isURLCustomValidator),
     movieId: Joi.number().integer().required(),
     nameRU: Joi.string().required(),
