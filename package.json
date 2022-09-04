@@ -1,7 +1,7 @@
 {
   "name": "diploma-backend",
   "author": "Peters Maxim",
-  "main": "index.js",
+  "main": "app.js",
   "license": "ISC",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
