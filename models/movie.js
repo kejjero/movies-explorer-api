@@ -26,7 +26,9 @@ const movieSchema = new mongoose.Schema({
     type: String,
     required: true,
     validate: {
-      validator: (link) => validator.isURL(link),
+      validator(link) {
+        return validator.isURL(link);
+      },
       message: 'Неправильная ссылка',
     },
   },
@@ -34,7 +36,9 @@ const movieSchema = new mongoose.Schema({
     type: String,
     required: true,
     validate: {
-      validator: (link) => validator.isURL(link),
+      validator(link) {
+        return validator.isURL(link);
+      },
       message: 'Неправильная ссылка',
     },
   },
@@ -42,14 +46,16 @@ const movieSchema = new mongoose.Schema({
     type: String,
     required: true,
     validate: {
-      validator: (link) => validator.isURL(link),
+      validator(link) {
+        return validator.isURL(link);
+      },
       message: 'Неправильная ссылка',
     },
   },
   owner: {
     type: mongoose.Schema.Types.ObjectId,
-    required: true,
     ref: 'user',
+    required: true,
   },
   movieId: {
     type: Number,

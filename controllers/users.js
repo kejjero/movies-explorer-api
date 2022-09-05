@@ -1,27 +1,25 @@
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcrypt');
 const User = require('../models/user');
+
 const BadRequestError = require('../errors/BadRequestError');
+const AuthorisationError = require('../errors/AuthorisationError');
 const NotFoundError = require('../errors/NotFoundError');
 const ConflictError = require('../errors/ConflictError');
-const AuthorizationError = require('../errors/AuthorisationError');
 
 const { NODE_ENV, JWT_SECRET } = process.env;
 const MONGO_DUPLICATE_KEY_CODE = 11000;
 
 const login = (req, res, next) => {
   const { email, password } = req.body;
-
   return User.findUserByCredentials(email, password)
     .then((user) => {
-      const token = jwt.sign(
-        { _id: user._id },
-        NODE_ENV === 'production' ? JWT_SECRET : 'some-secret-key',
-        { expiresIn: '7d' },
-      );
+      const token = jwt.sign({ _id: user._id }, NODE_ENV === 'production' ? JWT_SECRET : 'dev-secret', { expiresIn: '7d' });
       res.send({ token });
     })
-    .catch(() => next(new AuthorizationError('Авторизация не пройдена')));
+    .catch(() => {
+      next(new AuthorisationError('Передан неверный логин или пароль'));
+    });
 };
 
 const createUser = (req, res, next) => {
@@ -30,47 +28,57 @@ const createUser = (req, res, next) => {
     email,
     password,
   } = req.body;
-
-  return bcrypt.hash(password, 10)
+  bcrypt.hash(password, 10)
     .then((hash) => User.create({
-      name,
-      email,
-      password: hash,
+      name, email, password: hash,
     }))
-    .then((user) => res.send({
-      name: user.name,
-      email: user.email,
-    }))
+    .then(() => res.status(200)
+      .send({
+        data: {
+          name, email,
+        },
+      }))
     .catch((err) => {
-      if (err.code === MONGO_DUPLICATE_KEY_CODE) {
-        next(new ConflictError('Данный email уже зарегистрирован'));
+      if (err.name === 'ValidationError') {
+        next(new BadRequestError('Переданы некорректные данные'));
+      } else if (err.code === 11000) {
+        next(new ConflictError('Пользователь с указаным Email уже существует'));
       } else {
         next(err);
       }
     });
 };
 
-const getUser = (req, res, next) => {
-  User.findById(req.user._id)
+const findAuthorizationUser = (req, res, next) => {
+  const id = req.user._id;
+  User.findById(id)
     .then((user) => {
       if (!user) {
-        return next(new NotFoundError('Пользователь с таким id не найден.'));
+        next(new NotFoundError('Пользователь не найден.'));
+        return;
       }
-      return res.status(200).send(user);
+      res.send(user);
     })
     .catch((err) => {
+      if (err.name === 'CastError') {
+        next(new BadRequestError('Нет такого пользователя.'));
+      }
       next(err);
     });
 };
 
 const updateUser = (req, res, next) => {
   const { name, email } = req.body;
-
-  return User.findByIdAndUpdate(req.user._id, { name, email }, { new: true, runValidators: true })
-    .then((user) => res.status(200).send(user))
+  User.findByIdAndUpdate(req.user._id, { name, email }, { new: true, runValidators: true })
+    .orFail(new NotFoundError('Пользователь с таким _id не найден'))
+    .then((user) => {
+      res.send(user);
+    })
     .catch((err) => {
-      if (err.name === 'ValidationError') {
+      if (err.name === 'ValidationError' || err.name === 'CastError') {
         next(new BadRequestError('Переданы некорректные данные.'));
+      } else if (err.code === MONGO_DUPLICATE_KEY_CODE) {
+        next(new ConflictError('Указанные данные уже используются.'));
       } else {
         next(err);
       }
@@ -78,8 +86,5 @@ const updateUser = (req, res, next) => {
 };
 
 module.exports = {
-  createUser,
-  getUser,
-  updateUser,
-  login,
+  login, createUser, findAuthorizationUser, updateUser,
 };
