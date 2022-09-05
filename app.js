@@ -22,6 +22,8 @@ app.get('/crash-test', () => {
   }, 0);
 });
 
+mongoose.connect(moviesdb);
+
 app.use(requestLogger);
 
 app.use(limiter);
@@ -37,11 +39,5 @@ app.use(errorLogger);
 app.use(errors());
 
 app.use(errorHandler);
-
-mongoose.connect(moviesdb, {
-  useNewUrlParser: true,
-  useCreateIndex: true,
-  useFindAndModify: false,
-});
 
 app.listen(PORT);
