@@ -1,43 +1,45 @@
-require('dotenv').config();
-const cors = require('cors');
-const helmet = require('helmet');
 const express = require('express');
 const mongoose = require('mongoose');
 const { errors } = require('celebrate');
-const limiter = require('./middlewares/rateLimit');
+const cors = require('cors');
+const rateLimit = require('express-rate-limit');
+require('dotenv').config();
+
 const { requestLogger, errorLogger } = require('./middlewares/logger');
-
-const errorHandler = require('./middlewares/errorHandler');
-const router = require('./routes/index');
-
-const { PORT = 3000, moviesdb = 'mongodb://localhost:27017/moviesdb' } = process.env;
+const routes = require('./routes');
 
 const app = express();
-
-app.use(cors());
-
-app.get('/crash-test', () => {
-  setTimeout(() => {
-    throw new Error('Сервер сейчас упадёт');
-  }, 0);
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
 });
 
-mongoose.connect(moviesdb);
-
-app.use(requestLogger);
+const { PORT } = 3000;
 
 app.use(limiter);
-
-app.use(helmet());
-
-app.use(express.json());
-
-app.use(router);
-
+app.use(cors());
+app.use(requestLogger);
+app.use(routes);
 app.use(errorLogger);
-
 app.use(errors());
+app.use((err, req, res, next) => {
+  const { statusCode = 500, message } = err;
+  res
+    .status(statusCode)
+    .send({
+      message: statusCode === 500
+        ? 'На сервере произошла ошибка'
+        : message,
+    });
 
-app.use(errorHandler);
+  next();
+});
 
-app.listen(PORT);
+async function startApp() {
+  await mongoose.connect('mongodb://localhost:27017/moviesdb');
+  await app.listen(PORT, () => {
+    console.log(`App listening on port ${PORT}`);
+  });
+}
+
+startApp();

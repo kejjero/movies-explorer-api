@@ -1,21 +1,33 @@
-const router = require('express').Router();
-const { signInValidator, signUpValidator } = require('../middlewares/validators');
-const { login, createUser } = require('../controllers/users');
+const express = require('express');
+const { celebrate, Joi } = require('celebrate');
+
+const userRoutes = require('./users');
+const movieRoutes = require('./movies');
 const auth = require('../middlewares/auth');
-const userRouter = require('./users');
-const movieRouter = require('./movies');
-const NotFoundError = require('../errors/NotFoundError');
+const { login, createUser } = require('../controllers/users');
+const { validateEmail } = require('../utils/validators');
+const NotFoundError = require('../errors/notFoundError');
 
-router.post('/signin', signInValidator, login);
+const routes = express.Router();
 
-router.post('/signup', signUpValidator, createUser);
-
-router.use('/users', auth, userRouter);
-
-router.use('/movies', auth, movieRouter);
-
-router.use('*', auth, (req, res, next) => {
-  next(new NotFoundError('Запрашиваемая страница не найдена'));
+routes.post('/signup', express.json(), celebrate({
+  body: Joi.object().keys({
+    name: Joi.string().required().min(2).max(30),
+    email: Joi.string().custom(validateEmail, 'Email validation').required(),
+    password: Joi.string().required(),
+  }),
+}), createUser);
+routes.post('/signin', express.json(), celebrate({
+  body: Joi.object().keys({
+    email: Joi.string().custom(validateEmail, 'Email validation').required(),
+    password: Joi.string().required(),
+  }),
+}), login);
+routes.use(auth);
+routes.use('/users', userRoutes);
+routes.use('/movies', movieRoutes);
+routes.use('*', () => {
+  throw new NotFoundError('Страница не найдена. Проверьте URL');
 });
 
-module.exports = router;
+module.exports = routes;
