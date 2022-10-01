@@ -1,64 +1,79 @@
 const Movie = require('../models/movie');
+const NotFoundError = require('../errors/notFoundError');
+const ForbiddenError = require('../errors/forbiddenError');
+const BadRequestError = require('../errors/badRequestError');
+const ServerError = require('../errors/serverError');
 
-const NotFoundError = require('../errors/NotFoundError');
-const ConflictError = require('../errors/ConflictError');
-const BadRequestError = require('../errors/BadRequestError');
-const ProhibitedAction = require('../errors/ProhibitedAction');
+const {
+  OK_CODE,
+  CREATED_CODE,
+} = require('../utils/constants');
 
-const getMovies = (req, res, next) => {
-  const owner = req.user._id;
-
-  Movie.find({ owner })
-    .then((movies) => {
-      res.send(movies);
-    })
-    .catch((err) => {
-      throw new NotFoundError(err.message);
-    })
-    .catch(next);
+module.exports.getSavedMovies = async (req, res, next) => {
+  try {
+    const savedMovies = await Movie.find({ owner: req.user._id });
+    res.status(OK_CODE).send(savedMovies);
+  } catch (err) {
+    next(new BadRequestError('Произошла ошибка'));
+  }
 };
 
-const createMovie = (req, res, next) => {
-  const owner = req.user._id;
-
-  Movie.create({ owner, ...req.body })
-    .then((movie) => {
-      res.send(movie);
-    })
-    .catch((err) => {
-      if (err.name === 'ValidationError') {
-        throw new BadRequestError(err.message);
-      } else if (err.code === 11000) {
-        throw new ConflictError(err.message);
-      }
-    })
-    .catch(next);
+module.exports.createMovie = async (req, res, next) => {
+  const {
+    country,
+    director,
+    duration,
+    year,
+    description,
+    image,
+    trailerLink,
+    nameRU,
+    nameEN,
+    thumbnail,
+    movieId,
+  } = req.body;
+  try {
+    const newMovie = await Movie.create({
+      country,
+      director,
+      duration,
+      year,
+      description,
+      image,
+      trailerLink,
+      nameRU,
+      nameEN,
+      thumbnail,
+      movieId,
+      owner: req.user._id,
+    });
+    const movieWithLinkInfo = await newMovie.populate(['owner']);
+    res.status(CREATED_CODE).send(movieWithLinkInfo);
+  } catch (err) {
+    if (err.name === 'ValidationError') {
+      next(new BadRequestError(err.message));
+    } else {
+      next(new ServerError('Произошла ошибка'));
+    }
+  }
 };
 
-const deleteMovie = (req, res, next) => {
-  const owner = req.user._id;
-  const { movieId } = req.params;
-
-  Movie.findById(movieId)
-    .then((movie) => {
-      if (!movie) {
-        throw new NotFoundError('у Вас нет прав на удаление фильма');
-      }
-      if (movie.owner.toString() !== owner) {
-        throw new ProhibitedAction('Нет доступа к удалению фильма.');
-      } else {
-        Movie.findByIdAndDelete(movieId)
-          .then((deletedMovie) => {
-            res.send(deletedMovie);
-          })
-          .catch(next);
-      }
-    })
-    .catch(next);
-};
-
-module.exports = {
-  getMovies,
-  createMovie,
-  deleteMovie,
+module.exports.deleteSavedMovie = async (req, res, next) => {
+  try {
+    const movie = await Movie.findById(req.params.id);
+    if (!movie) {
+      throw new NotFoundError('Запрашиваемый фильм не найден');
+    } else if (String(movie.owner) === String(req.user._id)) {
+      const deletedMovie = await Movie.findByIdAndDelete(req.params.id);
+      res.status(OK_CODE).send(deletedMovie);
+    } else {
+      throw new ForbiddenError('Вы не можете удалить фильм из чужого списка сохраненных фильмов');
+    }
+  } catch (err) {
+    if (err.name === 'CastError') {
+      next(new BadRequestError(err.message));
+    } else {
+      next(err);
+    }
+  }
 };
